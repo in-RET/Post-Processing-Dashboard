@@ -475,4 +475,117 @@ def display_system_summary(bus_dfs, component_dfs, metadata):
         fig = px.pie(values=list(bus_totals.values()), names=list(bus_totals.keys()), 
                     title="Total Flow Distribution by Bus")
         st.plotly_chart(fig, use_container_width=True)
+        
+def create_simple_sankey(bus_dfs, component_bus_mapping):
+    """Create a simplified Sankey diagram from bus data"""
+    try:
+        labels = []
+        source = []
+        target = []
+        value = []
+        
+        # Track nodes
+        node_indices = {}
+        current_idx = 0
+        
+        # Collect all flows from bus DataFrames
+        all_flows = []
+        
+        for bus_name, df in bus_dfs.items():
+            # Add bus to nodes
+            if bus_name not in node_indices:
+                node_indices[bus_name] = current_idx
+                labels.append(bus_name)
+                current_idx += 1
+            
+            # Process each flow in this bus
+            for column in df.columns:
+                # Parse flow direction: "component -> bus" or "bus -> component"
+                if ' -> ' in column:
+                    parts = column.split(' -> ')
+                    if len(parts) == 2:
+                        from_node, to_node = parts
+                        
+                        # Add nodes if not exists
+                        if from_node not in node_indices:
+                            node_indices[from_node] = current_idx
+                            labels.append(from_node)
+                            current_idx += 1
+                        
+                        if to_node not in node_indices:
+                            node_indices[to_node] = current_idx
+                            labels.append(to_node)
+                            current_idx += 1
+                        
+                        # Calculate total flow
+                        total_flow = df[column].sum()
+                        
+                        if total_flow > 0:
+                            source.append(node_indices[from_node])
+                            target.append(node_indices[to_node])
+                            value.append(total_flow)
+        
+        if source and target and value:
+            fig = go.Figure(data=[go.Sankey(
+                node=dict(
+                    pad=15,
+                    thickness=20,
+                    line=dict(color="black", width=0.5),
+                    label=labels
+                ),
+                link=dict(
+                    source=source,
+                    target=target,
+                    value=value
+                )
+            )])
+            
+            fig.update_layout(
+                title_text="Energy Flow Sankey Diagram",
+                font_size=10,
+                height=600
+            )
+            
+            return fig
+        else:
+            return None
+            
+    except Exception as e:
+        print(f"Error in simple Sankey: {e}")
+        return None
+
+def display_sankey_diagram(energysystem, results, bus_dfs, component_bus_mapping):
+    """Display Sankey diagram in the dashboard"""
+    st.header("🔄 System Sankey Diagram")
+    
+    # Create Sankey diagram
+    sankey_fig = create_simple_sankey(bus_dfs, component_bus_mapping)
+    
+    if sankey_fig:
+        st.plotly_chart(sankey_fig, use_container_width=True)
+        
+        # Add some statistics
+        st.subheader("Flow Statistics")
+        total_flow = sum(sankey_fig.data[0].link.value)
+        num_flows = len(sankey_fig.data[0].link.value)
+        num_nodes = len(sankey_fig.data[0].node.label)
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Total Energy Flow", f"{total_flow:.0f} MWh")
+        with col2:
+            st.metric("Number of Flows", num_flows)
+        with col3:
+            st.metric("Number of Nodes", num_nodes)
+    else:
+        st.warning("Could not generate Sankey diagram with available data")
+        
+        # Alternative: Show system structure
+        st.subheader("System Structure")
+        for bus_name, df in bus_dfs.items():
+            with st.expander(f"Bus: {bus_name}"):
+                st.write(f"Connected flows: {len(df.columns)}")
+                for flow in df.columns:
+                    total_flow = df[flow].sum()
+                    st.write(f"- {flow}: {total_flow:.1f} MWh")
             

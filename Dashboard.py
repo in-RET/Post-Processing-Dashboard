@@ -9,18 +9,19 @@ Interactive Dashboard for postprocessing
 import streamlit as st
 from datetime import datetime
 import tempfile
-from src.postprocessing.dashboard_utils import load_oemof_results, interpret_results, create_bus_dataframes, create_component_dataframes, extract_system_metadata
-from src.postprocessing.dashboard_utils import display_bus_analysis, display_component_analysis, display_system_summary
+from src.dashboard_utils import load_oemof_results, interpret_results, create_bus_dataframes, create_component_dataframes, extract_system_metadata
+from src.dashboard_utils import display_bus_analysis, display_component_analysis, display_system_summary, display_sankey_diagram
+from src.responsive_layout import ResponsiveLayout, create_responsive_tabs, responsive_display_system_summary
 import os
+workdir = os.getcwd()
 
 st.set_page_config(
         page_title="Oemof Energy Model Analysis", 
         layout="wide",
-        page_icon="🔋"
+        page_icon="⚡"
     )
-    
-st.title("🔋 Oemof Energy System Dashboard")
-st.markdown("Upload your oemof dump file to analyze simulation results")
+layout = ResponsiveLayout()    
+
 
 # File upload section
 st.sidebar.header("📁 Data Upload")
@@ -31,8 +32,9 @@ uploaded_file = st.sidebar.file_uploader(
 )
 
 if uploaded_file is not None:
+    st.title("🔋 Oemof Energy System Dashboard")
+    st.markdown("Upload your oemof dump file to analyze simulation results")
     try:
-        # Display file info
         file_details = {
             "Filename": uploaded_file.name,
             "File size": f"{uploaded_file.size / 1024:.1f} KB",
@@ -42,44 +44,40 @@ if uploaded_file is not None:
         st.sidebar.success("✅ File uploaded successfully!")
         st.sidebar.json(file_details)
         
-        # Save uploaded file to temporary file
+        # save uploaded file to temporary file
         with tempfile.NamedTemporaryFile(delete=False, suffix='.dump') as tmp_file:
             tmp_file.write(uploaded_file.getvalue())
             tmp_file_path = tmp_file.name
                 
-        # Load and process data
         with st.spinner("Loading and processing oemof data..."):
             energysystem, results = load_oemof_results(tmp_file_path)
             
             if energysystem is not None and results is not None:
-                # Use the enhanced interpret_results function
                 bus_sequences, bus_scalars, component_sequences, component_scalars, component_bus_mapping = interpret_results(results)
-                
-                # Create DataFrames
                 bus_dfs = create_bus_dataframes(bus_sequences, energysystem)
                 component_dfs = create_component_dataframes(component_sequences, energysystem)
-                
-                # Extract metadata
                 metadata = extract_system_metadata(energysystem, bus_dfs, component_dfs, component_bus_mapping)
-                
-                # Clean up temporary file
                 os.unlink(tmp_file_path)
                 
                 # Create tabs for different analyses
-                tab1, tab2, tab3 = st.tabs([
-                    "Bus Analysis", 
-                    "Component Analysis", 
-                    "System Overview"
+                tabs = create_responsive_tabs([
+                    "🔌 Bus Analysis", 
+                    "⚙️ Component Analysis", 
+                    "📊 System Overview",
+                    "🦍 Sankey Diagram"
                 ])
                 
-                with tab1:
+                with tabs[0]:
                     display_bus_analysis(bus_dfs, metadata)
                 
-                with tab2:
+                with tabs[1]:
                     display_component_analysis(component_dfs, metadata)
                 
-                with tab3:
+                with tabs[2]:
                     display_system_summary(bus_dfs, component_dfs, metadata)
+                
+                with tabs[3]:
+                    display_sankey_diagram(energysystem, results, bus_dfs, component_bus_mapping)
             
             else:
                 st.error("Failed to load the oemof dump file. Please check the file format.")
@@ -90,14 +88,54 @@ if uploaded_file is not None:
 
 else:
     # Welcome message when no file is uploaded
+    # st.markdown("""
+    # ## Welcome to the Oemof Energy System Dashboard!
+    
+    # This dashboard provides:
+    
+    # - **Bus Analysis**: Detailed flow analysis for each energy bus
+    # - **Component Analysis**: Individual component performance
+    # - **System Overview**: Comprehensive system metrics and summaries
+    
+    # Upload your oemof dump file to get started!
+    # """)
+    
     st.markdown("""
-    ## Welcome to the Oemof Energy System Dashboard!
+        <div style='text-align: center; padding: 2rem 1rem;'>
+            <h1 style='margin-bottom: 1rem;'>Welcome to the Oemof Energy System Dashboard!</h1>
+            <p style='font-size: 1.1rem; margin-bottom: 2rem;'>
+            Upload your oemof dump file to analyze your energy system modeling results
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
     
-    This dashboard provides:
+    features = [
+            ("🔌", "Bus Analysis", "Detailed flow analysis for each energy bus.\nThe flows represented here is from a bus to the components connected to the bus."),
+            ("⚙️", "Component Analysis", "Individual flow analysis for each component.\nThe flows represented here is from a component to the connected bus." ), 
+            ("📊", "System Overview", "Overall summary of the system"),
+            ("🦍", "Sankey Diagrams", "Visual energy flow diagram")
+        ]
+        
+        # Create adaptive columns for features
+    num_cols = min(4, len(features))
+    cols = st.columns(num_cols)
+    #cols = layout.create_adaptive_columns(len(features))
     
-    - **Bus Analysis**: Detailed flow analysis for each energy bus
-    - **Component Analysis**: Individual component performance
-    - **System Overview**: Comprehensive system metrics and summaries
-    
-    Upload your oemof dump file to get started!
-    """)
+    for i, (icon, title, description) in enumerate(features):
+        with cols[i % num_cols]:
+            st.markdown(f"""
+            <div style='
+                text-align: center; 
+                padding: 1rem;
+                margin: 0.5rem 0;
+                border: 1px solid #e0e0e0;
+                border-radius: 10px;
+                background: white;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                height: 100%;
+            '>
+                <div style='font-size: 2rem; margin-bottom: 0.5rem;'>{icon}</div>
+                <h4 style='margin: 0.5rem 0;'>{title}</h4>
+                <p style='margin: 0; font-size: 0.9rem; color: #666;'>{description}</p>
+            </div>
+            """, unsafe_allow_html=True)
