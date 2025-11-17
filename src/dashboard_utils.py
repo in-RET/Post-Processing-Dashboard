@@ -125,16 +125,16 @@ def create_bus_dataframes(bus_sequences, energysystem):
             
             # Ensure we have a 1D array
             if hasattr(flow_values, 'shape') and len(flow_values.shape) == 1:
-                bus_data[f"{component_name} -> {bus_name}"] = flow_values
+                bus_data[f"{bus_name} -> {component_name}"] = flow_values
             else:
                 # If it's 2D, take the first column or flatten
                 try:
                     if hasattr(flow_values, 'shape') and len(flow_values.shape) == 2:
-                        bus_data[f"{component_name} -> {bus_name}"] = flow_values[:, 0]
+                        bus_data[f"{bus_name} -> {component_name}"] = flow_values[:, 0]
                     else:
-                        bus_data[f"{component_name} -> {bus_name}"] = flow_values.flatten()
+                        bus_data[f"{bus_name} -> {component_name}"] = flow_values.flatten()
                 except:
-                    st.warning(f"Could not process data for {component_name} -> {bus_name}")
+                    st.warning(f"Could not process data for {bus_name} -> {component_name}")
                     continue
         
         if bus_data:
@@ -476,6 +476,7 @@ def display_system_summary(bus_dfs, component_dfs, metadata):
                     title="Total Flow Distribution by Bus")
         st.plotly_chart(fig, use_container_width=True)
         
+<<<<<<< Updated upstream
 def create_simple_sankey(bus_dfs, component_bus_mapping):
     """Create a simplified Sankey diagram from bus data"""
     try:
@@ -589,3 +590,5 @@ def display_sankey_diagram(energysystem, results, bus_dfs, component_bus_mapping
                     total_flow = df[flow].sum()
                     st.write(f"- {flow}: {total_flow:.1f} MWh")
             
+=======
+>>>>>>> Stashed changes
