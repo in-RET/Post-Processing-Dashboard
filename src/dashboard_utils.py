@@ -556,7 +556,7 @@ def create_simple_sankey(bus_dfs, component_bus_mapping):
 
 def display_sankey_diagram(energysystem, results, bus_dfs, component_bus_mapping):
     """Display Sankey diagram in the dashboard"""
-    st.header("🔄 System Sankey Diagram")
+    st.header("🦍 System Sankey Diagram")
     
     # Create Sankey diagram
     sankey_fig = create_simple_sankey(bus_dfs, component_bus_mapping)

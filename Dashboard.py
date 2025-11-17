@@ -110,8 +110,8 @@ else:
         """, unsafe_allow_html=True)
     
     features = [
-            ("🔌", "Bus Analysis", "Detailed flow analysis for each energy bus.\nThe flows represented here is from a bus to the components connected to the bus."),
-            ("⚙️", "Component Analysis", "Individual flow analysis for each component.\nThe flows represented here is from a component to the connected bus." ), 
+            ("🔌", "Bus Analysis", "Detailed flow analysis for each energy bus.<br>The flows represented here is from a bus to the components connected to the bus."),
+            ("⚙️", "Component Analysis", "Individual flow analysis for each component.<br>The flows represented here is from a component to the connected bus." ), 
             ("📊", "System Overview", "Overall summary of the system"),
             ("🦍", "Sankey Diagrams", "Visual energy flow diagram")
         ]
