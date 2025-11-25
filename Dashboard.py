@@ -11,6 +11,7 @@ from datetime import datetime
 import tempfile
 from src.dashboard_utils import load_oemof_results, interpret_results, create_bus_dataframes, create_component_dataframes, extract_system_metadata
 from src.dashboard_utils import display_bus_analysis, display_component_analysis, display_system_summary
+from src.scenario_comparison import compare_scenarios
 from src.responsive_layout import ResponsiveLayout, create_responsive_tabs, responsive_display_system_summary
 from src.sankey import display_colored_sankey_diagram
 from src.network_graph import display_interactive_network_analysis
@@ -59,33 +60,38 @@ if uploaded_file is not None:
                 bus_dfs = create_bus_dataframes(bus_sequences, energysystem)
                 component_dfs = create_component_dataframes(component_sequences, energysystem)
                 metadata = extract_system_metadata(energysystem, bus_dfs, component_dfs, component_bus_mapping)
-                os.unlink(tmp_file_path)
+                
                 
                 # Create tabs for different analyses
                 tabs = create_responsive_tabs([
+                    "📊 System Overview",
                     "🔌 Bus Analysis", 
                     "⚙️ Component Analysis", 
-                    "📊 System Overview",
                     "🦍 Sankey Diagram",
                     "📈 Network Graph",
+                    "🆚 Multi-Scenario Comparison"
                 ])
                 
                 with tabs[0]:
-                    display_bus_analysis(bus_dfs, metadata)
+                    display_system_summary(bus_dfs, component_dfs, metadata, energysystem, results)
                 
                 with tabs[1]:
-                    display_component_analysis(component_dfs, metadata)
-                
+                    display_bus_analysis(bus_dfs, metadata)
+                    
                 with tabs[2]:
-                    display_system_summary(bus_dfs, component_dfs, metadata)
-                
+                    display_component_analysis(component_dfs, metadata)
+                    
                 with tabs[3]:
                     #display_sankey_diagram(energysystem, results, bus_dfs, component_bus_mapping)
                     display_colored_sankey_diagram(energysystem, results, bus_dfs, component_dfs, component_bus_mapping)
                 
                 with tabs[4]:  # Your Network tab
                     display_interactive_network_analysis(energysystem, bus_dfs, component_dfs, component_bus_mapping)
-        
+                
+                with tabs[5]:
+                    compare_scenarios(energysystem, results, bus_dfs, component_dfs, component_bus_mapping)
+                
+                os.unlink(tmp_file_path)
             else:
                 st.error("Failed to load the oemof dump file. Please check the file format.")
                 
@@ -121,7 +127,8 @@ else:
             ("⚙️", "Component Analysis", "Individual flow analysis for each component.<br>The flows represented here is from a component to the connected bus." ), 
             ("📊", "System Overview", "Overall summary of the system"),
             ("🦍", "Sankey Diagrams", "Visual energy flow diagram"),
-            ("📈", "Network Graph", "Visual enery system flow connection")
+            ("📈", "Network Graph", "Visual enery system flow connection"),
+            ("🆚", "Multi-Scenario Comparison", "Compare several DUMP files")
         ]
         
         # Create adaptive columns for features

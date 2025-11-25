@@ -19,6 +19,7 @@ from datetime import datetime
 from oemof import network, solph
 import shutil
 from oemof.solph import processing
+from src.cost_calc import cost_calculation_from_es_and_results
 
 my_path = os.path.abspath(os.path.dirname(__file__))
 def load_oemof_results(dump_file_path):
@@ -405,8 +406,119 @@ def display_component_analysis(component_dfs, metadata):
         # Flow summary
         st.subheader("Flow Summary")
         st.dataframe(comp_df.describe())
+        
+        
+def display_cost_analysis(energysystem, results):
+    """Display cost analysis in system summary using the exact cost calculation function"""
+    st.subheader("💰 Cost Analysis")
+    
+    try:
+        # Calculate costs using the exact function
+        cost_df = cost_calculation_from_es_and_results(energysystem, results)
+        
+        # Calculate totals
+        total_investment = cost_df['investment costs'].sum() if 'investment costs' in cost_df.columns else 0
+        total_variable = cost_df['variable costs'].sum() if 'variable costs' in cost_df.columns else 0
+        total_profits = cost_df['profits'].sum() if 'profits' in cost_df.columns else 0
+        total_costs = total_investment + total_variable + total_profits
+        
+        # Display total cost metrics
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric("Total System Costs", f" Mio. € {total_costs/1000000:,.0f}")
+        
+        with col2:
+            st.metric("Investment Costs", f" Mio. € {total_investment/1000000:,.0f}")
+        
+        with col3:
+            st.metric("Variable Costs", f" Mio. € {total_variable/1000000:,.0f}")
+        
+        with col4:
+            st.metric("Profits/Revenues", f" Mio. € {total_profits/1000000:,.0f}")
+        
+        # Display detailed cost breakdown
+        st.subheader("📊 Detailed Cost Breakdown")
+        
+        # Create tabs for different cost types
+        tab1, tab2, tab3 = st.tabs(["🏗️ Investment Costs", "⚡ Variable Costs", "💰 Profits"])
+        
+        with tab1:
+            if 'investment costs' in cost_df.columns and not cost_df['investment costs'].empty:
+                investment_data = []
+                for component, cost in cost_df['investment costs'].items():
+                    if cost > 0:
+                        investment_data.append({
+                            'Component Connection': str(component),
+                            'Investment Cost (€)': cost
+                        })
+                if investment_data:
+                    investment_df = pd.DataFrame(investment_data)
+                    st.dataframe(
+                        investment_df.style.format({'Investment Cost (€)': '{:,.0f}'}),
+                        use_container_width=True
+                    )
+                else:
+                    st.info("No investment costs found")
+            else:
+                st.info("No investment costs data available")
+        
+        with tab2:
+            if 'variable costs' in cost_df.columns and not cost_df['variable costs'].empty:
+                variable_data = []
+                for component, cost in cost_df['variable costs'].items():
+                    if cost > 0:
+                        variable_data.append({
+                            'Component Connection': str(component),
+                            'Variable Cost (€)': cost
+                        })
+                if variable_data:
+                    variable_df = pd.DataFrame(variable_data)
+                    st.dataframe(
+                        variable_df.style.format({'Variable Cost (€)': '{:,.0f}'}),
+                        use_container_width=True
+                    )
+                else:
+                    st.info("No variable costs found")
+            else:
+                st.info("No variable costs data available")
+        
+        with tab3:
+            if 'profits' in cost_df.columns and not cost_df['profits'].empty:
+                profit_data = []
+                for component, profit in cost_df['profits'].items():
+                    if profit > 0:
+                        profit_data.append({
+                            'Component Connection': str(component),
+                            'Profit/Revenue (€)': profit
+                        })
+                if profit_data:
+                    profit_df = pd.DataFrame(profit_data)
+                    st.dataframe(
+                        profit_df.style.format({'Profit/Revenue (€)': '{:,.0f}'}),
+                        use_container_width=True
+                    )
+                else:
+                    st.info("No profits/revenues found")
+            else:
+                st.info("No profits data available")
+        
+        # Download cost data
+        st.subheader("📥 Export Cost Data")
+        cost_csv = cost_df.to_csv()
+        st.download_button(
+            label="Download Cost Breakdown CSV",
+            data=cost_csv,
+            file_name=f"cost_breakdown_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+            mime="text/csv"
+        )
+        
+    except Exception as e:
+        st.error(f"Error calculating costs: {e}")
+        import traceback
+        st.error(f"Detailed error: {traceback.format_exc()}")
 
-def display_system_summary(bus_dfs, component_dfs, metadata):
+def display_system_summary(bus_dfs, component_dfs, metadata, energysystem, results):
     st.header("📊 System Overview")
     
     # Key metrics
@@ -429,6 +541,8 @@ def display_system_summary(bus_dfs, component_dfs, metadata):
     with col4:
         st.metric("Time Resolution", f"{metadata['timeframe']['periods']} periods")
         st.metric("Duration", metadata['system_summary']['simulation_duration'])
+        
+    display_cost_analysis(energysystem, results)
     
     # Bus summary table
     st.subheader("Bus Summary")
@@ -476,7 +590,7 @@ def display_system_summary(bus_dfs, component_dfs, metadata):
                     title="Total Flow Distribution by Bus")
         st.plotly_chart(fig, use_container_width=True)
         
-<<<<<<< Updated upstream
+
 def create_simple_sankey(bus_dfs, component_bus_mapping):
     """Create a simplified Sankey diagram from bus data"""
     try:
@@ -590,5 +704,3 @@ def display_sankey_diagram(energysystem, results, bus_dfs, component_bus_mapping
                     total_flow = df[flow].sum()
                     st.write(f"- {flow}: {total_flow:.1f} MWh")
             
-=======
->>>>>>> Stashed changes
