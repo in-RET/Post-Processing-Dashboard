@@ -348,11 +348,32 @@ def create_component_multiindex_total_flow_table(all_scenarios):
         for scenario in all_scenarios:
             scenario_name = scenario['name']
             component_dfs = scenario['component_dfs']
+            component_bus_mapping = scenario['component_bus_mapping']
             
             if component in component_dfs:
                 df = component_dfs[component]
-                total_flow = df.sum().sum()
-                comp_row[('Total Flow (MWh)', scenario_name)] = total_flow
+                should_include = True
+                
+                if component in component_bus_mapping:
+                    bus_info = component_bus_mapping[component]
+                    
+                    if isinstance(bus_info, dict):
+                        output_buses = bus_info.get('outputs', [])
+                    elif isinstance(bus_info, (list, tuple)):
+                        output_buses = bus_info
+                    elif isinstance(bus_info, str):
+                        output_buses = [bus_info]
+                    else:
+                        output_buses = []
+                    
+                    # If ALL output buses contain "none", exclude this component
+                    if output_buses and all('none' in str(bus).lower() for bus in output_buses):
+                        should_include = False
+                if should_include:
+                    total_flow = df.sum().sum()
+                    comp_row[('Total Flow (MWh)', scenario_name)] = total_flow
+                else:
+                    comp_row[('Total Flow (MWh)', scenario_name)] = 0
             else:
                 comp_row[('Total Flow (MWh)', scenario_name)] = 0
         
@@ -380,11 +401,33 @@ def create_component_multiindex_peak_flow_table(all_scenarios):
         for scenario in all_scenarios:
             scenario_name = scenario['name']
             component_dfs = scenario['component_dfs']
+            component_bus_mapping = scenario['component_bus_mapping']
             
             if component in component_dfs:
                 df = component_dfs[component]
-                peak_flow = df.max().max()
-                comp_row[('Peak Flow (MW)', scenario_name)] = peak_flow
+                should_include = True
+                
+                if component in component_bus_mapping:
+                    bus_info = component_bus_mapping[component]
+                    
+                    if isinstance(bus_info, dict):
+                        output_buses = bus_info.get('outputs', [])
+                    elif isinstance(bus_info, (list, tuple)):
+                        output_buses = bus_info
+                    elif isinstance(bus_info, str):
+                        output_buses = [bus_info]
+                    else:
+                        output_buses = []
+                    
+                    # If ALL output buses contain "none", exclude this component
+                    if output_buses and all('none' in str(bus).lower() for bus in output_buses):
+                        should_include = False
+                
+                if should_include:
+                    peak_flow = df.max().max()
+                    comp_row[('Peak Flow (MW)', scenario_name)] = peak_flow
+                else:
+                    comp_row[('Peak Flow (MW)', scenario_name)] = 0
             else:
                 comp_row[('Peak Flow (MW)', scenario_name)] = 0
         
@@ -416,6 +459,8 @@ def create_regional_component_multiindex_peak_flow_table(all_scenarios):
         for scenario in all_scenarios:
             scenario_name = scenario['name']
             component_dfs = scenario['component_dfs']
+            component_bus_mapping = scenario['component_bus_mapping']
+            
             
             # SUM all regional peaks for this component (not max)
             total_peak_flow = 0
@@ -424,9 +469,28 @@ def create_regional_component_multiindex_peak_flow_table(all_scenarios):
             for component_name in component_dfs.keys():
                 if get_base_component_name(component_name, regional_suffixes) == base_component:
                     df = component_dfs[component_name]
-                    component_peak = df.max().max()
-                    total_peak_flow += component_peak
-                    regional_components.append(component_name)
+                    should_include = True
+                    
+                    if component_name in component_bus_mapping:
+                        bus_info = component_bus_mapping[component_name]
+                        
+                        if isinstance(bus_info, dict):
+                            output_buses = bus_info.get('outputs', [])
+                        elif isinstance(bus_info, (list, tuple)):
+                            output_buses = bus_info
+                        elif isinstance(bus_info, str):
+                            output_buses = [bus_info]
+                        else:
+                            output_buses = []
+                        
+                        # If ALL output buses contain "none", exclude this component
+                        if output_buses and all('none' in str(bus).lower() for bus in output_buses):
+                            should_include = False
+                    
+                    if should_include:
+                        component_peak = df.max().max()
+                        total_peak_flow += component_peak
+                        regional_components.append(component_name)
             
             comp_row[('Peak Flow (MW)', scenario_name)] = total_peak_flow
         
@@ -458,6 +522,7 @@ def create_regional_component_multiindex_total_flow_table(all_scenarios):
         for scenario in all_scenarios:
             scenario_name = scenario['name']
             component_dfs = scenario['component_dfs']
+            component_bus_mapping = scenario['component_bus_mapping']
             
             # Sum all regional total flows for this component
             total_flow = 0
@@ -466,8 +531,27 @@ def create_regional_component_multiindex_total_flow_table(all_scenarios):
             for component_name in component_dfs.keys():
                 if get_base_component_name(component_name, regional_suffixes) == base_component:
                     df = component_dfs[component_name]
-                    total_flow += df.sum().sum()
-                    regional_components.append(component_name)
+                    should_include = True
+                    
+                    if component_name in component_bus_mapping:
+                        bus_info = component_bus_mapping[component_name]
+                        
+                        if isinstance(bus_info, dict):
+                            output_buses = bus_info.get('outputs', [])
+                        elif isinstance(bus_info, (list, tuple)):
+                            output_buses = bus_info
+                        elif isinstance(bus_info, str):
+                            output_buses = [bus_info]
+                        else:
+                            output_buses = []
+                        
+                        # If ALL output buses contain "none", exclude this component
+                        if output_buses and all('none' in str(bus).lower() for bus in output_buses):
+                            should_include = False
+                    
+                    if should_include:
+                        total_flow += df.sum().sum()
+                        regional_components.append(component_name)
             
             comp_row[('Total Flow (MWh)', scenario_name)] = total_flow
         

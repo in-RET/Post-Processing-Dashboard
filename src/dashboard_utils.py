@@ -165,7 +165,9 @@ def create_component_dataframes(component_sequences, energysystem):
         component_data = {}
         
         for target_name, sequence_data in targets.items():
-            # Extract the actual flow values from the sequence data
+            if str(target_name) == 'None':
+                continue
+            
             if hasattr(sequence_data, 'values'):
                 # If it's a pandas Series or similar with .values attribute
                 flow_values = sequence_data.values
@@ -315,10 +317,10 @@ def display_bus_analysis(bus_dfs, metadata):
         
         if selected_flows:
             fig = make_subplots(
-                rows=2, cols=2,
-                subplot_titles=('Time Series', 'Cumulative Flow', 'Daily Profile', 'Flow Distribution'),
-                specs=[[{"secondary_y": False}, {"secondary_y": False}],
-                       [{"secondary_y": False}, {"secondary_y": False}]]
+                rows=2, cols=1,
+                subplot_titles=('Time Series', 'Daily Profile'),
+                specs=[[{"secondary_y": False}],
+                       [{"secondary_y": False}]]
             )
             
             # Time series
@@ -328,13 +330,13 @@ def display_bus_analysis(bus_dfs, metadata):
                     row=1, col=1
                 )
             
-            # Cumulative flow
-            for flow in selected_flows:
-                fig.add_trace(
-                    go.Scatter(x=display_df.index, y=display_df[flow].cumsum(), 
-                             name=f"{flow} (cumulative)", showlegend=False),
-                    row=1, col=2
-                )
+            # # Cumulative flow
+            # for flow in selected_flows:
+            #     fig.add_trace(
+            #         go.Scatter(x=display_df.index, y=display_df[flow].cumsum(), 
+            #                  name=f"{flow} (cumulative)", showlegend=False),
+            #         row=1, col=2
+            #     )
             
             # Daily profile (if we have hourly data)
             if len(display_df) > 24:
@@ -346,12 +348,12 @@ def display_bus_analysis(bus_dfs, metadata):
                         row=2, col=1
                     )
             
-            # Distribution
-            for flow in selected_flows:
-                fig.add_trace(
-                    go.Box(y=display_df[flow], name=flow, showlegend=False),
-                    row=2, col=2
-                )
+            # # Distribution
+            # for flow in selected_flows:
+            #     fig.add_trace(
+            #         go.Box(y=display_df[flow], name=flow, showlegend=False),
+            #         row=2, col=2
+            #     )
             
             fig.update_layout(height=800, title_text=f"Bus Analysis: {selected_bus}")
             st.plotly_chart(fig, use_container_width=True)

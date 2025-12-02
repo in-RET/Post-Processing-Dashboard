@@ -265,7 +265,8 @@ def create_colored_sankey(bus_dfs, component_dfs, component_bus_mapping):
                     thickness=25,
                     line=dict(color="black", width=1),
                     label=labels,
-                    color=node_colors
+                    color=node_colors,
+                    hovertemplate='<b>%{label}</b><extra></extra>'
                 ),
                 link=dict(
                     source=source_combined,
@@ -278,7 +279,11 @@ def create_colored_sankey(bus_dfs, component_dfs, component_bus_mapping):
             
             fig.update_layout(
                 title_text="Energy Flow Sankey Diagram",
-                font_size=12,
+                font=dict(
+                            family="Arial, sans-serif",  
+                            size=14,                     
+                            color="black"                
+                        ),
                 height=800,
                 margin=dict(t=100, l=50, r=50, b=50)
             )
@@ -537,7 +542,8 @@ def create_grouped_sankey(bus_dfs, component_dfs, component_bus_mapping):
                     thickness=25,
                     line=dict(color="black", width=1),
                     label=labels,
-                    color=node_colors
+                    color=node_colors,
+                    hovertemplate='<b>%{label}</b><extra></extra>'
                 ),
                 link=dict(
                     source=source,
@@ -550,7 +556,11 @@ def create_grouped_sankey(bus_dfs, component_dfs, component_bus_mapping):
             
             fig.update_layout(
                 title_text="Grouped Energy Flow Sankey Diagram",
-                font_size=12,
+                font=dict(
+                            family="Arial, sans-serif",  
+                            size=14,                     
+                            color="black"                
+                        ),
                 height=800,
                 margin=dict(t=100, l=50, r=50, b=50)
             )

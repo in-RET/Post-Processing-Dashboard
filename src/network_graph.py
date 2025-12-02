@@ -14,14 +14,11 @@ import pandas as pd
 def create_interactive_network_diagram(energysystem, bus_dfs, component_dfs, component_bus_mapping):
     """Create an interactive network diagram with labels and enhanced features"""
     try:
-        # Create a directed graph
         G = nx.DiGraph()
         
-        # Add all nodes from energysystem with your specific styling
         for node in energysystem.nodes:
             node_label = str(node.label)
             
-            # Apply your exact styling rules
             if isinstance(node, solph.components.Source):
                 G.add_node(node_label, 
                           type='source',
