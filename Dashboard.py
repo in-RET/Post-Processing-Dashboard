@@ -9,8 +9,8 @@ Interactive Dashboard for postprocessing
 import streamlit as st
 from datetime import datetime
 import tempfile
-from src.dashboard_utils import load_oemof_results, interpret_results, create_bus_dataframes, create_component_dataframes, extract_system_metadata
-from src.dashboard_utils import display_bus_analysis, display_component_analysis, display_system_summary
+from src.dashboard_utils import load_oemof_results, interpret_results, create_bus_dataframes, create_component_dataframes, extract_system_metadata, create_storage_dataframes
+from src.dashboard_utils import display_bus_analysis, display_component_analysis, display_system_summary, display_storage_analysis
 from src.scenario_comparison import compare_scenarios
 from src.responsive_layout import ResponsiveLayout, create_responsive_tabs, responsive_display_system_summary
 from src.sankey import display_colored_sankey_diagram
@@ -60,7 +60,8 @@ if uploaded_file is not None:
                 bus_sequences, bus_scalars, component_sequences, component_scalars, component_bus_mapping = interpret_results(results)
                 bus_dfs = create_bus_dataframes(bus_sequences, energysystem)
                 component_dfs = create_component_dataframes(component_sequences, energysystem)
-                metadata = extract_system_metadata(energysystem, bus_dfs, component_dfs, component_bus_mapping)
+                storage_dfs= create_storage_dataframes(component_sequences, energysystem)
+                metadata = extract_system_metadata(energysystem, bus_dfs, component_dfs, storage_dfs, component_bus_mapping)
                 
                 
                 # Create tabs for different analyses
@@ -68,6 +69,7 @@ if uploaded_file is not None:
                     "📊 System Overview",
                     "🔌 Bus Analysis", 
                     "⚙️ Component Analysis", 
+                    "🔋 Storage Analysis",
                     "🦍 Sankey Diagram",
                     "📈 Network Graph",
                     "🆚 Multi-Scenario Comparison"
@@ -81,16 +83,19 @@ if uploaded_file is not None:
                     
                 with tabs[2]:
                     display_component_analysis(component_dfs, metadata)
-                    
+                
                 with tabs[3]:
+                    display_storage_analysis(storage_dfs, metadata)
+                    
+                with tabs[4]:
                     #display_sankey_diagram(energysystem, results, bus_dfs, component_bus_mapping)
                     display_colored_sankey_diagram(energysystem, results, bus_dfs, component_dfs, component_bus_mapping)
                 
-                with tabs[4]:  # Your Network tab
+                with tabs[5]:  # Your Network tab
                     display_interactive_network_analysis(energysystem, bus_dfs, component_dfs, component_bus_mapping)
                     
-                with tabs[5]:
-                    compare_scenarios(energysystem, results, bus_dfs, component_dfs, component_bus_mapping)
+                with tabs[6]:
+                    compare_scenarios(energysystem, results, bus_dfs, component_dfs, storage_dfs, component_bus_mapping)
                 
                 os.unlink(tmp_file_path)
             else:
@@ -113,6 +118,7 @@ else:
     features = [
             ("🔌", "Bus Analysis", "Detailed flow analysis for each energy bus.<br>The flows represented here is from a bus to the components connected to the bus."),
             ("⚙️", "Component Analysis", "Individual flow analysis for each component.<br>The flows represented here is from a component to the connected bus." ), 
+            ("🔋", "Storage Analysis", "Individual flow analysis for each Storage.<br>The flows represented here is from a storage to the None bus." ), 
             ("📊", "System Overview", "Overall summary of the system"),
             ("🦍", "Sankey Diagrams", "Visual energy flow diagram"),
             ("📈", "Network Graph", "Visual enery system flow connection"),

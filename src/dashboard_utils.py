@@ -214,11 +214,65 @@ def create_component_dataframes(component_sequences, energysystem):
     
     return component_dfs
 
-def extract_system_metadata(energysystem, bus_dfs, component_dfs, component_bus_mapping):
+def create_storage_dataframes(component_sequences, energysystem):
+    """Convert component sequences to DataFrames for STORAGES ONLY that flow to 'NONE'"""
+    storage_dfs = {}
+    
+    for component_name, targets in component_sequences.items():
+        is_storage = any(keyword in component_name.lower() 
+                        for keyword in ['storage', 'battery'])
+        
+        if not is_storage:
+            continue
+            
+        component_data = {}
+        
+        for target_name, sequence_data in targets.items():
+            if str(target_name).upper() != 'NONE':
+                continue
+            
+            if hasattr(sequence_data, 'values'):
+                flow_values = sequence_data.values
+            elif isinstance(sequence_data, dict):
+                flow_data = sequence_data.get('flow', None)
+                if flow_data is not None and hasattr(flow_data, 'values'):
+                    flow_values = flow_data.values
+                else:
+                    continue  
+            else:
+                continue  
+            
+            if hasattr(flow_values, 'shape') and len(flow_values.shape) == 1:
+                component_data[f"{component_name} -> {target_name}"] = flow_values
+            else:
+                try:
+                    if hasattr(flow_values, 'shape') and len(flow_values.shape) == 2:
+                        component_data[f"{component_name} -> {target_name}"] = flow_values[:, 0]
+                    else:
+                        component_data[f"{component_name} -> {target_name}"] = flow_values.flatten()
+                except:
+                    print(f"Could not process data for {component_name} -> {target_name}")
+                    continue
+        
+        if component_data:
+            time_index = energysystem.timeindex
+            min_length = min(len(arr) for arr in component_data.values())
+            if min_length != len(time_index):
+                print(f"Data length mismatch for storage {component_name}. Truncating to {min_length} points.")
+                time_index = time_index[:min_length]
+            
+            for key in component_data.keys():
+                component_data[key] = component_data[key][:min_length]
+            storage_dfs[component_name] = pd.DataFrame(component_data, index=time_index[:min_length])
+    
+    return storage_dfs
+
+def extract_system_metadata(energysystem, bus_dfs, component_dfs, storage_dfs, component_bus_mapping):
     """Extract comprehensive system metadata"""
     metadata = {
         'buses': {},
         'components': {},
+        'storages': {},
         'timeframe': {
             'start': energysystem.timeindex[0],
             'end': energysystem.timeindex[-1],
@@ -247,10 +301,21 @@ def extract_system_metadata(energysystem, bus_dfs, component_dfs, component_bus_
             'data_points': len(df)
         }
     
+    # Storage metadata
+    for component_name, df in storage_dfs.items():
+        metadata['storages'][component_name] = {
+            'connected_bus': component_bus_mapping.get(component_name, 'Unknown'),
+            'data_columns': df.columns.tolist(),
+            'total_flow': df.sum().sum(),
+            'max_flow': df.max().max(),
+            'data_points': len(df)
+        }
+    
     # System summary
     metadata['system_summary'] = {
         'total_buses': len(bus_dfs),
-        'total_components': len(component_dfs),
+        'total_components': len(component_dfs)-len(storage_dfs),
+        'total_storages': len(storage_dfs),
         'total_data_points': len(energysystem.timeindex),
         'simulation_duration': f"{(energysystem.timeindex[-1] - energysystem.timeindex[0]).days} days"
     }
@@ -392,6 +457,44 @@ def display_component_analysis(component_dfs, metadata):
             st.metric("Total Flow", f"{comp_meta['total_flow']:.0f} MWh")
             st.metric("Total Flow in TWh", f"{comp_meta['total_flow']/1000000:.2f} TWh" )
             st.metric("Max Flow", f"{comp_meta['max_flow']:.1f} MW")
+            st.metric("Connected Bus", comp_meta['connected_bus'])
+        
+        with col2:
+            # Display all flows for this component
+            st.subheader("Component Flows")
+            for col in comp_df.columns:
+                total_flow = comp_df[col].sum()
+                st.write(f"**{col}**: {total_flow:.0f} MWh")
+        
+        # Time series plot
+        fig = px.line(comp_df, title=f"Component Flows: {selected_component}")
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # Flow summary
+        st.subheader("Flow Summary")
+        st.dataframe(comp_df.describe())
+
+def display_storage_analysis(storage_dfs, metadata):
+    st.header("⚙️ Storage Analysis")
+    
+    if not storage_dfs:
+        st.info("No Storage data available")
+        return
+    
+    # Component selection
+    selected_component = st.selectbox("Select Component", list(storage_dfs.keys()), key="storage_analysis_selectbox")
+    
+    if selected_component:
+        comp_df = storage_dfs[selected_component]
+        comp_meta = metadata['storages'][selected_component]
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.subheader(f"Component: {selected_component}")
+            st.metric("Total Flow", f"{comp_meta['total_flow']:.0f} MWh")
+            st.metric("Total Flow in TWh", f"{comp_meta['total_flow']/1000000:.2f} TWh" )
+            st.metric("Max Flow", f"{comp_meta['max_flow']:.1f} MWh")
             st.metric("Connected Bus", comp_meta['connected_bus'])
         
         with col2:

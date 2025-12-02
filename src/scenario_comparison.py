@@ -7,13 +7,13 @@ Created on Mon Nov 24 12:51:24 2025
 import streamlit as st
 import pandas as pd
 import tempfile
-from src.dashboard_utils import load_oemof_results, interpret_results, create_bus_dataframes, create_component_dataframes, extract_system_metadata
+from src.dashboard_utils import load_oemof_results, interpret_results, create_bus_dataframes, create_component_dataframes, extract_system_metadata, create_storage_dataframes
 import os
 import plotly.express as px
 from datetime import datetime
 from src.cost_calc import cost_calculation_from_es_and_results
 
-def compare_scenarios(energysystem, results, bus_dfs, component_dfs, component_bus_mapping):
+def compare_scenarios(energysystem, results, bus_dfs, component_dfs, storage_dfs, component_bus_mapping):
     st.header("🔄 Multi-Scenario Comparison")
     
     base_scenario_name = st.text_input("Base Scenario Name", value="Base Scenario", key="base_name")
@@ -93,11 +93,13 @@ def compare_scenarios(energysystem, results, bus_dfs, component_dfs, component_b
                     bus_sequences_comp, bus_scalars_comp, component_sequences_comp, component_scalars_comp, component_bus_mapping_comp = interpret_results(results_comp)
                     bus_dfs_comp = create_bus_dataframes(bus_sequences_comp, energysystem_comp)
                     component_dfs_comp = create_component_dataframes(component_sequences_comp, energysystem_comp)
+                    storage_dfs_comp = create_storage_dataframes(component_sequences_comp, energysystem_comp)
                     
                     comparison_data.append({
                         'name': scenario['name'],
                         'bus_dfs': bus_dfs_comp,
                         'component_dfs': component_dfs_comp,
+                        'storage_dfs': storage_dfs_comp,
                         'component_bus_mapping': component_bus_mapping_comp,
                         'energysystem': energysystem_comp,  
                         'results': results_comp,
@@ -105,7 +107,7 @@ def compare_scenarios(energysystem, results, bus_dfs, component_dfs, component_b
                     })
             
             display_comparison_tables(
-                bus_dfs, component_dfs, component_bus_mapping, base_scenario_name,
+                bus_dfs, component_dfs, storage_dfs, component_bus_mapping, base_scenario_name,
                 comparison_data, energysystem, results, is_regionalisation
             )
             
@@ -123,8 +125,8 @@ def compare_scenarios(energysystem, results, bus_dfs, component_dfs, component_b
     else:
         st.info("🔢 Select the number of comparison scenarios to get started")
     
-def display_comparison_tables(base_bus_dfs, base_component_dfs, base_component_bus_mapping,
-                              base_name, comparison_data, base_energysystem, base_results, is_regionalisation = False):
+def display_comparison_tables(base_bus_dfs, base_component_dfs, base_storage_dfs, base_component_bus_mapping,
+                              base_name, comparison_data, base_energysystem, base_results, is_regionalisation=False):
     """Display simple comparison tables with multiindex columns (Total Flow first level, scenarios second level)"""
     
     # Create combined data for all scenarios
@@ -132,120 +134,183 @@ def display_comparison_tables(base_bus_dfs, base_component_dfs, base_component_b
         'name': base_name, 
         'bus_dfs': base_bus_dfs, 
         'component_dfs': base_component_dfs,
+        'storage_dfs': base_storage_dfs,
         'component_bus_mapping': base_component_bus_mapping,
         'energysystem': base_energysystem,  # Base scenario energysystem
         'results': base_results  # Base scenario results
     }]
     all_scenarios.extend(comparison_data)
     
+    # Create tabs for different comparison types
+    tab1, tab2, tab3 = st.tabs(["🚌 Bus Comparison", "⚙️ Component Comparison", "🔋 Storage Comparison"])
     
-    # Bus Summary Tables
-    st.subheader("🚌 Bus Summary Comparison")
-    
-    # Create tabs for Total Flow and Peak Flow
-    bus_tab1, bus_tab2 = st.tabs(["📊 Total Flow (MWh)", "🔝 Peak Flow (MW)"])
-    
-    with bus_tab1:
-        st.write("**Total Energy Flow through Buses**")
-        if is_regionalisation:
-            bus_total_flow_data = create_regional_bus_multiindex_total_flow_table(all_scenarios)
-        else:
-            bus_total_flow_data = create_bus_multiindex_total_flow_table(all_scenarios)
+    with tab1:
+        # Bus Summary Tables
+        st.subheader("🚌 Bus Summary Comparison")
         
-        if not bus_total_flow_data.empty:
-            styled_bus_total_df = format_multiindex_dataframe(bus_total_flow_data, 'total')
-            st.dataframe(styled_bus_total_df, use_container_width=True, height=400)
-        else:
-            st.info("No bus data available for comparison")
-    
-    with bus_tab2:
-        st.write("**Maximum Power Flow through Buses**")
-        if is_regionalisation:
-            bus_peak_flow_data = create_regional_bus_multiindex_peak_flow_table(all_scenarios)
-        else:
-            bus_peak_flow_data = create_bus_multiindex_peak_flow_table(all_scenarios)
+        # Create tabs for Total Flow and Peak Flow
+        bus_tab1, bus_tab2 = st.tabs(["📊 Total Flow (MWh)", "🔝 Peak Flow (MW)"])
         
-        if not bus_peak_flow_data.empty:
-            styled_bus_peak_df = format_multiindex_dataframe(bus_peak_flow_data, 'peak')
-            st.dataframe(styled_bus_peak_df, use_container_width=True, height=400)
-        else:
-            st.info("No bus data available for comparison")
-    
-    # Download buttons for bus data
-    col1, col2 = st.columns(2)
-    with col1:
-        if not bus_total_flow_data.empty:
-            bus_total_csv = bus_total_flow_data.to_csv(index=False)
-            st.download_button(
-                label="Download Bus Total Flow CSV",
-                data=bus_total_csv,
-                file_name=f"bus_total_flow_comparison_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
-                mime="text/csv"
-            )
-    with col2:
-        if not bus_peak_flow_data.empty:
-            bus_peak_csv = bus_peak_flow_data.to_csv(index=False)
-            st.download_button(
-                label="Download Bus Peak Flow CSV",
-                data=bus_peak_csv,
-                file_name=f"bus_peak_flow_comparison_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
-                mime="text/csv"
-            )
-    
-    st.markdown("---")
-    
-    # Component Summary Tables
-    st.subheader("⚙️ Component Summary Comparison")
-    
-    # Create tabs for Total Flow and Peak Flow
-    comp_tab1, comp_tab2 = st.tabs(["📊 Total Flow (MWh)", "🔝 Peak Flow (MW)"])
-    
-    with comp_tab1:
-        st.write("**Total Energy Flow from Components**")
-        if is_regionalisation:
-            component_total_flow_data = create_regional_component_multiindex_total_flow_table(all_scenarios)
-        else:
-            component_total_flow_data = create_component_multiindex_total_flow_table(all_scenarios)
+        with bus_tab1:
+            st.write("**Total Energy Flow through Buses**")
+            if is_regionalisation:
+                bus_total_flow_data = create_regional_bus_multiindex_total_flow_table(all_scenarios)
+            else:
+                bus_total_flow_data = create_bus_multiindex_total_flow_table(all_scenarios)
+            
+            if not bus_total_flow_data.empty:
+                styled_bus_total_df = format_multiindex_dataframe(bus_total_flow_data, 'total')
+                st.dataframe(styled_bus_total_df, use_container_width=True, height=400)
+            else:
+                st.info("No bus data available for comparison")
         
-        if not component_total_flow_data.empty:
-            styled_comp_total_df = format_multiindex_dataframe(component_total_flow_data, 'total')
-            st.dataframe(styled_comp_total_df, use_container_width=True, height=400)
-        else:
-            st.info("No component data available for comparison")
-    
-    with comp_tab2:
-        st.write("**Maximum Power Flow from Components**")
-        if is_regionalisation:
-            component_peak_flow_data = create_regional_component_multiindex_peak_flow_table(all_scenarios)
-        else:
-            component_peak_flow_data = create_component_multiindex_peak_flow_table(all_scenarios)
+        with bus_tab2:
+            st.write("**Maximum Power Flow through Buses**")
+            if is_regionalisation:
+                bus_peak_flow_data = create_regional_bus_multiindex_peak_flow_table(all_scenarios)
+            else:
+                bus_peak_flow_data = create_bus_multiindex_peak_flow_table(all_scenarios)
+            
+            if not bus_peak_flow_data.empty:
+                styled_bus_peak_df = format_multiindex_dataframe(bus_peak_flow_data, 'peak')
+                st.dataframe(styled_bus_peak_df, use_container_width=True, height=400)
+            else:
+                st.info("No bus data available for comparison")
         
-        if not component_peak_flow_data.empty:
-            styled_comp_peak_df = format_multiindex_dataframe(component_peak_flow_data, 'peak')
-            st.dataframe(styled_comp_peak_df, use_container_width=True, height=400)
-        else:
-            st.info("No component data available for comparison")
+        # Download buttons for bus data
+        col1, col2 = st.columns(2)
+        with col1:
+            if not bus_total_flow_data.empty:
+                bus_total_csv = bus_total_flow_data.to_csv(index=False)
+                st.download_button(
+                    label="Download Bus Total Flow CSV",
+                    data=bus_total_csv,
+                    file_name=f"bus_total_flow_comparison_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                    mime="text/csv",
+                    key="download_bus_total"
+                )
+        with col2:
+            if not bus_peak_flow_data.empty:
+                bus_peak_csv = bus_peak_flow_data.to_csv(index=False)
+                st.download_button(
+                    label="Download Bus Peak Flow CSV",
+                    data=bus_peak_csv,
+                    file_name=f"bus_peak_flow_comparison_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                    mime="text/csv",
+                    key="download_bus_peak"
+                )
     
-    # Download buttons for component data
-    col1, col2 = st.columns(2)
-    with col1:
-        if not component_total_flow_data.empty:
-            comp_total_csv = component_total_flow_data.to_csv(index=False)
-            st.download_button(
-                label="Download Component Total Flow CSV",
-                data=comp_total_csv,
-                file_name=f"component_total_flow_comparison_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
-                mime="text/csv"
-            )
-    with col2:
-        if not component_peak_flow_data.empty:
-            comp_peak_csv = component_peak_flow_data.to_csv(index=False)
-            st.download_button(
-                label="Download Component Peak Flow CSV",
-                data=comp_peak_csv,
-                file_name=f"component_peak_flow_comparison_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
-                mime="text/csv"
-            )
+    with tab2:
+        # Component Summary Tables
+        st.subheader("⚙️ Component Summary Comparison")
+        
+        # Create tabs for Total Flow and Peak Flow
+        comp_tab1, comp_tab2 = st.tabs(["📊 Total Flow (MWh)", "🔝 Peak Flow (MW)"])
+        
+        with comp_tab1:
+            st.write("**Total Energy Flow from Components**")
+            if is_regionalisation:
+                component_total_flow_data = create_regional_component_multiindex_total_flow_table(all_scenarios)
+            else:
+                component_total_flow_data = create_component_multiindex_total_flow_table(all_scenarios)
+            
+            if not component_total_flow_data.empty:
+                styled_comp_total_df = format_multiindex_dataframe(component_total_flow_data, 'total')
+                st.dataframe(styled_comp_total_df, use_container_width=True, height=400)
+            else:
+                st.info("No component data available for comparison")
+        
+        with comp_tab2:
+            st.write("**Maximum Power Flow from Components**")
+            if is_regionalisation:
+                component_peak_flow_data = create_regional_component_multiindex_peak_flow_table(all_scenarios)
+            else:
+                component_peak_flow_data = create_component_multiindex_peak_flow_table(all_scenarios)
+            
+            if not component_peak_flow_data.empty:
+                styled_comp_peak_df = format_multiindex_dataframe(component_peak_flow_data, 'peak')
+                st.dataframe(styled_comp_peak_df, use_container_width=True, height=400)
+            else:
+                st.info("No component data available for comparison")
+        
+        # Download buttons for component data
+        col1, col2 = st.columns(2)
+        with col1:
+            if not component_total_flow_data.empty:
+                comp_total_csv = component_total_flow_data.to_csv(index=False)
+                st.download_button(
+                    label="Download Component Total Flow CSV",
+                    data=comp_total_csv,
+                    file_name=f"component_total_flow_comparison_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                    mime="text/csv",
+                    key="download_comp_total"
+                )
+        with col2:
+            if not component_peak_flow_data.empty:
+                comp_peak_csv = component_peak_flow_data.to_csv(index=False)
+                st.download_button(
+                    label="Download Component Peak Flow CSV",
+                    data=comp_peak_csv,
+                    file_name=f"component_peak_flow_comparison_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                    mime="text/csv",
+                    key="download_comp_peak"
+                )
+    
+    with tab3:
+        # NEW: Storage Comparison Tables
+        st.subheader("🔋 Storage Comparison")
+        st.write("**Storage Flow to NONE buses (Storage capacity analysis)**")
+        
+        # Create tabs for Storage Total Flow and Peak Flow
+        storage_tab1, storage_tab2 = st.tabs(["📊 Storage Flow (MWh)", "🔝 Peak Storage Flow (MWh)"])
+        
+        with storage_tab1:
+            if is_regionalisation:
+                storage_total_flow_data = create_regional_storage_multiindex_total_flow_table(all_scenarios)
+            else:
+                storage_total_flow_data = create_storage_multiindex_total_flow_table(all_scenarios)
+            
+            if not storage_total_flow_data.empty:
+                styled_storage_total_df = format_multiindex_dataframe(storage_total_flow_data, 'total')
+                st.dataframe(styled_storage_total_df, use_container_width=True, height=400)
+            else:
+                st.info("No storage data available for comparison")
+        
+        with storage_tab2:
+            if is_regionalisation:
+                storage_peak_flow_data = create_regional_storage_multiindex_peak_flow_table(all_scenarios)
+            else:
+                storage_peak_flow_data = create_storage_multiindex_peak_flow_table(all_scenarios)
+            
+            if not storage_peak_flow_data.empty:
+                styled_storage_peak_df = format_multiindex_dataframe(storage_peak_flow_data, 'peak')
+                st.dataframe(styled_storage_peak_df, use_container_width=True, height=400)
+            else:
+                st.info("No storage data available for comparison")
+        
+        # Download buttons for storage data
+        col1, col2 = st.columns(2)
+        with col1:
+            if not storage_total_flow_data.empty:
+                storage_total_csv = storage_total_flow_data.to_csv(index=False)
+                st.download_button(
+                    label="Download Storage flow CSV",
+                    data=storage_total_csv,
+                    file_name=f"storage_flow_comparison_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                    mime="text/csv",
+                    key="download_storage_total"
+                )
+        with col2:
+            if not storage_peak_flow_data.empty:
+                storage_peak_csv = storage_peak_flow_data.to_csv(index=False)
+                st.download_button(
+                    label="Download Peak Storage flow CSV",
+                    data=storage_peak_csv,
+                    file_name=f"peak_storage_flow_comparison_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                    mime="text/csv",
+                    key="download_storage_peak"
+                )
+    
     st.markdown("---")
     display_cost_comparison(all_scenarios)
     
@@ -770,3 +835,146 @@ def display_cost_comparison(all_scenarios):
         )
     else:
         st.info("No cost data available for comparison")
+
+
+def create_storage_multiindex_total_flow_table(all_scenarios):
+    """Create a storage table with multiindex columns (Losses to NONE first level, scenarios second level)"""
+    storage_data = []
+    
+    # Get all unique storages from all scenarios
+    all_storages = set()
+    for scenario in all_scenarios:
+        if 'storage_dfs' in scenario:
+            all_storages.update(scenario['storage_dfs'].keys())
+    
+    # Create data for each storage
+    for storage in sorted(all_storages):
+        storage_row = {('Storage', ''): storage}
+        
+        for scenario in all_scenarios:
+            scenario_name = scenario['name']
+            storage_dfs = scenario.get('storage_dfs', {})
+            
+            if storage in storage_dfs:
+                df = storage_dfs[storage]
+                total_losses = df.sum().sum()
+                storage_row[('Flow to NONE (MWh)', scenario_name)] = round(total_losses)
+            else:
+                storage_row[('Flow to NONE (MWh)', scenario_name)] = 0
+        
+        storage_data.append(storage_row)
+    
+    df = pd.DataFrame(storage_data)
+    if not df.empty:
+        df.columns = pd.MultiIndex.from_tuples(df.columns)
+    return df
+
+def create_storage_multiindex_peak_flow_table(all_scenarios):
+    """Create a storage table with multiindex columns (Peak Losses first level, scenarios second level)"""
+    storage_data = []
+    
+    # Get all unique storages from all scenarios
+    all_storages = set()
+    for scenario in all_scenarios:
+        if 'storage_dfs' in scenario:
+            all_storages.update(scenario['storage_dfs'].keys())
+    
+    # Create data for each storage
+    for storage in sorted(all_storages):
+        storage_row = {('Storage', ''): storage}
+        
+        for scenario in all_scenarios:
+            scenario_name = scenario['name']
+            storage_dfs = scenario.get('storage_dfs', {})
+            
+            if storage in storage_dfs:
+                df = storage_dfs[storage]
+                peak_losses = df.max().max()
+                storage_row[('Peak Flow (MWh)', scenario_name)] = round(peak_losses)
+            else:
+                storage_row[('Peak Flow (MWh)', scenario_name)] = 0
+        
+        storage_data.append(storage_row)
+    
+    df = pd.DataFrame(storage_data)
+    if not df.empty:
+        df.columns = pd.MultiIndex.from_tuples(df.columns)
+    return df
+
+def create_regional_storage_multiindex_total_flow_table(all_scenarios):
+    """Create a regional storage table with multiindex columns"""
+    storage_data = []
+    
+    regional_suffixes = ['_n', '_s', '_e', '_m', '_north', '_swest', '_east', '_middle']
+    
+    # Get all unique base storage names
+    base_storages = set()
+    for scenario in all_scenarios:
+        if 'storage_dfs' in scenario:
+            for storage_name in scenario['storage_dfs'].keys():
+                base_name = get_base_component_name(storage_name, regional_suffixes)
+                base_storages.add(base_name)
+    
+    # Create data for each base storage
+    for base_storage in sorted(base_storages):
+        storage_row = {('Storage', ''): base_storage}
+        
+        for scenario in all_scenarios:
+            scenario_name = scenario['name']
+            storage_dfs = scenario.get('storage_dfs', {})
+            
+            # Sum all regional losses for this storage
+            total_losses = 0
+            
+            for storage_name in storage_dfs.keys():
+                if get_base_component_name(storage_name, regional_suffixes) == base_storage:
+                    df = storage_dfs[storage_name]
+                    total_losses += df.sum().sum()
+            
+            storage_row[('Flow to NONE (MWh)', scenario_name)] = round(total_losses)
+        
+        storage_data.append(storage_row)
+    
+    df = pd.DataFrame(storage_data)
+    if not df.empty:
+        df.columns = pd.MultiIndex.from_tuples(df.columns)
+    return df
+
+def create_regional_storage_multiindex_peak_flow_table(all_scenarios):
+    """Create a regional storage table with multiindex columns"""
+    storage_data = []
+    
+    regional_suffixes = ['_n', '_s', '_e', '_m', '_north', '_swest', '_east', '_middle']
+    
+    # Get all unique base storage names
+    base_storages = set()
+    for scenario in all_scenarios:
+        if 'storage_dfs' in scenario:
+            for storage_name in scenario['storage_dfs'].keys():
+                base_name = get_base_component_name(storage_name, regional_suffixes)
+                base_storages.add(base_name)
+    
+    # Create data for each base storage
+    for base_storage in sorted(base_storages):
+        storage_row = {('Storage', ''): base_storage}
+        
+        for scenario in all_scenarios:
+            scenario_name = scenario['name']
+            storage_dfs = scenario.get('storage_dfs', {})
+            
+            # Sum all regional peak losses for this storage
+            total_peak_losses = 0
+            
+            for storage_name in storage_dfs.keys():
+                if get_base_component_name(storage_name, regional_suffixes) == base_storage:
+                    df = storage_dfs[storage_name]
+                    total_peak_losses += df.max().max()
+            
+            storage_row[('Peak Flow (MWh)', scenario_name)] = round(total_peak_losses)
+        
+        storage_data.append(storage_row)
+    
+    df = pd.DataFrame(storage_data)
+    if not df.empty:
+        df.columns = pd.MultiIndex.from_tuples(df.columns)
+    return df
