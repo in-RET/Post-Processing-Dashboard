@@ -9,8 +9,8 @@ Interactive Dashboard for postprocessing
 import streamlit as st
 from datetime import datetime
 import tempfile
-from src.dashboard_utils import load_oemof_results, interpret_results, create_bus_dataframes, create_component_dataframes, extract_system_metadata, create_storage_dataframes
-from src.dashboard_utils import display_bus_analysis, display_component_analysis, display_system_summary, display_storage_analysis
+from src.dashboard_utils import load_oemof_results, interpret_results, create_bus_dataframes, create_component_dataframes, extract_system_metadata, create_storage_dataframes, create_combined_bus_component_dfs
+from src.dashboard_utils import display_bus_analysis, display_component_analysis, display_system_summary, display_storage_analysis, display_combined_bus_component_analysis, display_detailed_flow_anlaysis
 from src.scenario_comparison import compare_scenarios
 from src.responsive_layout import ResponsiveLayout, create_responsive_tabs, responsive_display_system_summary
 from src.sankey import display_colored_sankey_diagram
@@ -62,40 +62,46 @@ if uploaded_file is not None:
                 component_dfs = create_component_dataframes(component_sequences, energysystem)
                 storage_dfs= create_storage_dataframes(component_sequences, energysystem)
                 metadata = extract_system_metadata(energysystem, bus_dfs, component_dfs, storage_dfs, component_bus_mapping)
-                
+                combined_df = create_combined_bus_component_dfs(bus_sequences, component_sequences, energysystem)
                 
                 # Create tabs for different analyses
                 tabs = create_responsive_tabs([
                     "📊 System Overview",
-                    "🔌 Bus Analysis", 
-                    "⚙️ Component Analysis", 
-                    "🔋 Storage Analysis",
+                    "🔁 Flow Analysis",
+                    "📊 Detailed Flow Analysis", 
+                    #"⚙️ Component Analysis", 
+                    #"🔋 Storage Analysis",
                     "🦍 Sankey Diagram",
                     "📈 Network Graph",
-                    "🆚 Multi-Scenario Comparison"
+                    "🆚 Multi-Scenario Comparison",
                 ])
                 
                 with tabs[0]:
                     display_system_summary(bus_dfs, component_dfs, metadata, energysystem, results)
                 
                 with tabs[1]:
-                    display_bus_analysis(bus_dfs, metadata)
-                    
-                with tabs[2]:
-                    display_component_analysis(component_dfs, metadata)
+                    display_combined_bus_component_analysis(combined_df, metadata)
                 
-                with tabs[3]:
-                    display_storage_analysis(storage_dfs, metadata)
+                with tabs[2]:
+                    display_detailed_flow_anlaysis(bus_dfs, component_dfs, storage_dfs, metadata)
+                    #display_bus_analysis(bus_dfs, metadata)
                     
-                with tabs[4]:
+                # with tabs[3]:
+                #     display_component_analysis(component_dfs, metadata)
+                
+                # with tabs[4]:
+                #     display_storage_analysis(storage_dfs, metadata)
+                    
+                with tabs[3]:
                     #display_sankey_diagram(energysystem, results, bus_dfs, component_bus_mapping)
                     display_colored_sankey_diagram(energysystem, results, bus_dfs, component_dfs, component_bus_mapping)
                 
-                with tabs[5]:  # Your Network tab
+                with tabs[4]:  # Your Network tab
                     display_interactive_network_analysis(energysystem, bus_dfs, component_dfs, component_bus_mapping)
                     
-                with tabs[6]:
+                with tabs[5]:
                     compare_scenarios(energysystem, results, bus_dfs, component_dfs, storage_dfs, component_bus_mapping)
+                
                 
                 os.unlink(tmp_file_path)
             else:
@@ -116,13 +122,14 @@ else:
         """, unsafe_allow_html=True)
     
     features = [
-            ("🔌", "Bus Analysis", "Detailed flow analysis for each energy bus.<br>The flows represented here is from a bus to the components connected to the bus."),
-            ("⚙️", "Component Analysis", "Individual flow analysis for each component.<br>The flows represented here is from a component to the connected bus." ), 
-            ("🔋", "Storage Analysis", "Individual flow analysis for each Storage.<br>The flows represented here is from a storage to the None bus." ), 
             ("📊", "System Overview", "Overall summary of the system"),
+            ("🔁", "Flow Analysis", "Visualize the flow to and fro the bus"),    
+            ("📊", "Detailed Flow Anlaysis", "Detailed individual flow analysis for each energy bus, component, storage.<br>"),
+            #("⚙️", "Component Analysis", "Individual flow analysis for each component.<br> from a component to the connected bus." ), 
+            #("🔋", "Storage Analysis", "Individual flow analysis for each Storage.<br>The flows represented here is from a storage to the None bus." ),
             ("🦍", "Sankey Diagrams", "Visual energy flow diagram"),
             ("📈", "Network Graph", "Visual enery system flow connection"),
-            ("🆚", "Multi-Scenario Comparison", "Compare several DUMP files")
+            ("🆚", "Multi-Scenario Comparison", "Compare several DUMP files"),
         ]
         
         

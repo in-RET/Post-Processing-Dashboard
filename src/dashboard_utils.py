@@ -424,17 +424,17 @@ def display_bus_analysis(bus_dfs, metadata):
             st.plotly_chart(fig, use_container_width=True)
             
             # Summary statistics
-            st.subheader("Flow Statistics")
-            st.dataframe(display_df[selected_flows].describe())
+            #st.subheader("Flow Statistics")
+            #st.dataframe(display_df[selected_flows].describe())
             
             # Download button
-            csv = display_df[selected_flows].to_csv()
-            st.download_button(
-                label="Download Bus Data as CSV",
-                data=csv,
-                file_name=f"bus_{selected_bus}_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
-                mime="text/csv"
-            )
+            # csv = display_df[selected_flows].to_csv()
+            # st.download_button(
+            #     label="Download Bus Data as CSV",
+            #     data=csv,
+            #     file_name=f"bus_{selected_bus}_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+            #     mime="text/csv"
+            # )
 
 def display_component_analysis(component_dfs, metadata):
     st.header("⚙️ Component Analysis")
@@ -471,8 +471,8 @@ def display_component_analysis(component_dfs, metadata):
         st.plotly_chart(fig, use_container_width=True)
         
         # Flow summary
-        st.subheader("Flow Summary")
-        st.dataframe(comp_df.describe())
+        #st.subheader("Flow Summary")
+        #st.dataframe(comp_df.describe())
 
 def display_storage_analysis(storage_dfs, metadata):
     st.header("⚙️ Storage Analysis")
@@ -509,8 +509,8 @@ def display_storage_analysis(storage_dfs, metadata):
         st.plotly_chart(fig, use_container_width=True)
         
         # Flow summary
-        st.subheader("Flow Summary")
-        st.dataframe(comp_df.describe())
+        #st.subheader("Flow Summary")
+        #st.dataframe(comp_df.describe())
         
         
 def display_cost_analysis(energysystem, results):
@@ -809,3 +809,289 @@ def display_sankey_diagram(energysystem, results, bus_dfs, component_bus_mapping
                     total_flow = df[flow].sum()
                     st.write(f"- {flow}: {total_flow:.1f} MWh")
             
+def create_combined_bus_component_dfs(bus_sequences, component_sequences, energysystem):
+    """Create combined DataFrames showing flows to/from each bus"""
+    combined_dfs = {}
+    
+    for bus_name, components in bus_sequences.items():
+        combined_data = {}
+        
+        # Add flows FROM bus TO components (outputs)
+        for component_name, sequence_data in components.items():
+            flow_values = extract_flow_values(sequence_data)
+            if flow_values is not None:
+                # Output from bus to component
+                combined_data[f"OUT: {bus_name} → {component_name}"] = flow_values
+        
+        # Add flows FROM components TO bus (inputs)
+        for component_name, targets in component_sequences.items():
+            for target_name, sequence_data in targets.items():
+                if str(target_name) == bus_name:
+                    flow_values = extract_flow_values(sequence_data)
+                    if flow_values is not None:
+                        # Input from component to bus
+                        combined_data[f"IN: {component_name} → {bus_name}"] = flow_values
+        
+        if combined_data:
+            time_index = energysystem.timeindex
+            min_length = min(len(arr) for arr in combined_data.values())
+            
+            if min_length != len(time_index):
+                time_index = time_index[:min_length]
+
+            for key in combined_data.keys():
+                combined_data[key] = combined_data[key][:min_length]
+            
+            combined_dfs[bus_name] = pd.DataFrame(combined_data, index=time_index[:min_length])
+    
+    return combined_dfs
+
+def extract_flow_values(sequence_data):
+    """Helper function to extract flow values from sequence data"""
+    if hasattr(sequence_data, 'values'):
+        flow_values = sequence_data.values
+    elif isinstance(sequence_data, dict):
+        flow_data = sequence_data.get('flow', None)
+        if flow_data is not None and hasattr(flow_data, 'values'):
+            flow_values = flow_data.values
+        else:
+            return None
+    else:
+        return None
+    
+    # Ensure we have a 1D array
+    if hasattr(flow_values, 'shape'):
+        if len(flow_values.shape) == 1:
+            return flow_values
+        elif len(flow_values.shape) == 2:
+            return flow_values[:, 0]
+        else:
+            try:
+                return flow_values.flatten()
+            except:
+                return None
+    return None
+
+def display_combined_bus_component_analysis(combined_dfs, metadata=None):
+    """Display combined bus and component analysis with stacked plots only"""
+    st.header("Flow Analysis")
+    
+    if not combined_dfs:
+        st.warning("No combined flow data available")
+        return
+    
+    # Bus selection
+    selected_bus = st.selectbox("Select Bus", list(combined_dfs.keys()), 
+                                key="combined_bus_select")
+    
+    if selected_bus:
+        df = combined_dfs[selected_bus]
+        
+        # Create summary metrics
+        col1, col2, col3, col4 = st.columns(4)
+        
+        # Separate IN and OUT flows
+        in_flows = [col for col in df.columns if col.startswith("IN:")]
+        out_flows = [col for col in df.columns if col.startswith("OUT:")]
+        
+        with col1:
+            total_in = df[in_flows].sum().sum()
+            st.metric("Total Inflows", f"{total_in:,.0f} MWh")
+            st.metric("Avg Inflow", f"{total_in/len(df):.1f} MW")
+        
+        with col2:
+            total_out = df[out_flows].sum().sum()
+            st.metric("Total Outflows", f"{total_out:,.0f} MWh")
+            st.metric("Avg Outflow", f"{total_out/len(df):.1f} MW")
+        
+        with col3:
+            net_flow = total_in - total_out
+            st.metric("Net Flow", f"{net_flow:,.0f} MWh")
+            st.metric("Peak Inflow", f"{df[in_flows].max().max():.1f} MW")
+        
+        with col4:
+            balance_error = abs(net_flow) / max(total_in + total_out, 1) * 100
+            st.metric("Balance Error", f"{balance_error:.2f}%")
+            st.metric("Peak Outflow", f"{df[out_flows].max().max():.1f} MW")
+        
+        # Controls
+        col5, col6 = st.columns(2)
+        
+        with col5:
+            # Date range selection
+            min_date = df.index.min()
+            max_date = df.index.max()
+            date_range = st.date_input(
+                "Select date range:",
+                value=(min_date, max_date),
+                min_value=min_date,
+                max_value=max_date,
+                key="combined_date_range"
+            )
+        
+        with col6:
+            # Time resolution
+            resolution = st.selectbox("Time Resolution", 
+                                     ["Hourly", "Daily", "Weekly", "Monthly"],
+                                     index=1,  # Default to Daily
+                                     key="combined_resolution")
+        
+        # Filter data by date range
+        if len(date_range) == 2:
+            start_date, end_date = date_range
+            filtered_df = df.loc[start_date:end_date]
+        else:
+            filtered_df = df
+        
+        # Apply resolution
+        if resolution == "Hourly":
+            display_df = filtered_df
+        elif resolution == "Daily":
+            display_df = filtered_df.resample('D').sum()
+        elif resolution == "Weekly":
+            display_df = filtered_df.resample('W').sum()
+        elif resolution == "Monthly":
+            display_df = filtered_df.resample('M').sum()
+        
+        # Get all flows (automatically include all)
+        selected_in_flows = in_flows
+        selected_out_flows = out_flows
+        
+        # Create color palettes
+        if selected_in_flows:
+            in_colors = px.colors.qualitative.Set3[:len(selected_in_flows)]
+            if len(selected_in_flows) > len(in_colors):
+                in_colors = px.colors.qualitative.Alphabet[:len(selected_in_flows)]
+        
+        if selected_out_flows:
+            out_colors = px.colors.qualitative.Set2[:len(selected_out_flows)]
+            if len(selected_out_flows) > len(out_colors):
+                out_colors = px.colors.qualitative.Dark24[:len(selected_out_flows)]
+        
+        # Create stacked subplots
+        fig = make_subplots(
+            rows=2, cols=1,
+            subplot_titles=(f"Input Flows to {selected_bus} Bus", 
+                          f"Output Flows from {selected_bus} Bus"),
+            vertical_spacing=0.12,
+            shared_xaxes=True
+        )
+        
+        # Stack IN flows (top plot)
+        if selected_in_flows:
+            for i, flow_col in enumerate(selected_in_flows):
+                if flow_col in display_df.columns:
+                    # Clean flow name for legend
+                    flow_name = flow_col.replace("IN: ", "")
+                    fig.add_trace(
+                        go.Scatter(
+                            x=display_df.index,
+                            y=display_df[flow_col],
+                            name=flow_name,
+                            stackgroup='in',
+                            mode='none',
+                            fillcolor=in_colors[i % len(in_colors)],
+                            opacity=0.8,
+                            hoverinfo='x+y+name',
+                            hoverlabel=dict(namelength=-1)
+                        ),
+                        row=1, col=1
+                    )
+        
+        # Stack OUT flows (bottom plot)
+        if selected_out_flows:
+            for i, flow_col in enumerate(selected_out_flows):
+                if flow_col in display_df.columns:
+                    # Clean flow name for legend
+                    flow_name = flow_col.replace("OUT: ", "")
+                    fig.add_trace(
+                        go.Scatter(
+                            x=display_df.index,
+                            y=display_df[flow_col],
+                            name=flow_name,
+                            stackgroup='out',
+                            mode='none',
+                            fillcolor=out_colors[i % len(out_colors)],
+                            opacity=0.8,
+                            hoverinfo='x+y+name',
+                            hoverlabel=dict(namelength=-1)
+                        ),
+                        row=2, col=1
+                    )
+        
+        # Add total flow lines on top of stacks
+        if selected_in_flows and len(selected_in_flows) > 0:
+            total_in_series = display_df[selected_in_flows].sum(axis=1)
+            fig.add_trace(
+                go.Scatter(
+                    x=display_df.index,
+                    y=total_in_series,
+                    name="Total Input",
+                    line=dict(color='black', width=2, dash='dash'),
+                    mode='lines',
+                    showlegend=True
+                ),
+                row=1, col=1
+            )
+        
+        if selected_out_flows and len(selected_out_flows) > 0:
+            total_out_series = display_df[selected_out_flows].sum(axis=1)
+            fig.add_trace(
+                go.Scatter(
+                    x=display_df.index,
+                    y=total_out_series,
+                    name="Total Output",
+                    line=dict(color='black', width=2, dash='dash'),
+                    mode='lines',
+                    showlegend=True
+                ),
+                row=2, col=1
+            )
+        
+        # Update layout
+        fig.update_layout(
+            height=700,
+            title_text=f"Bus Flow Analysis: {selected_bus}",
+            showlegend=True,
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=-0.25,
+                xanchor="center",
+                x=0.5,
+                bgcolor="rgba(255, 255, 255, 0.8)",
+                bordercolor="lightgray",
+                borderwidth=1,
+                font=dict(size=14)
+            ),
+            hovermode='x unified',
+            plot_bgcolor='white'
+        )
+        
+        # Update y-axes labels and grid
+        fig.update_yaxes(title_text="Power (MW)", row=1, col=1, gridcolor='lightgray')
+        fig.update_yaxes(title_text="Power (MW)", row=2, col=1, gridcolor='lightgray')
+        
+        # Update x-axis
+        fig.update_xaxes(title_text="Time", row=2, col=1, gridcolor='lightgray')
+        fig.update_xaxes(showticklabels=False, row=1, col=1, gridcolor='lightgray')
+        
+        st.plotly_chart(fig, use_container_width=True)
+        
+def display_detailed_flow_anlaysis(bus_dfs, component_dfs, storage_dfs, metadata):
+    st.header("📊 Detailed Flow Analysis")
+    
+    tab_bus, tab_component, tab_storage = st.tabs([
+        "🔌 Bus Analysis", 
+        "⚙️ Component Analysis", 
+        "🔋 Storage Analysis"
+    ])
+    
+    with tab_bus:
+        display_bus_analysis(bus_dfs, metadata)
+    
+    with tab_component:
+        display_component_analysis(component_dfs, metadata)
+    
+    with tab_storage:
+        display_storage_analysis(storage_dfs, metadata)

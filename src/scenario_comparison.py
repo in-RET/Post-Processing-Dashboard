@@ -42,7 +42,7 @@ def compare_scenarios(energysystem, results, bus_dfs, component_dfs, storage_dfs
     st.subheader("🔢 Comparison Setup")
     num_comparisons = st.selectbox(
         "Number of comparison scenarios", 
-        options=[1, 2, 3, 4, 5],
+        options=[1, 2, 3, 4, 5, 6],
         index=0,
         help="Select how many scenarios you want to compare with the base scenario"
     )
