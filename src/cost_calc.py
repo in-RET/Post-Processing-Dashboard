@@ -3,10 +3,7 @@
 Created on Mon Nov 24 15:54:10 2025
 
 @author: rbala
-"""
 
-# -*- coding: utf-8 -*-
-"""
 Cost calculation functions for Oemof energy systems
 """
 

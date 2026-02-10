@@ -317,7 +317,7 @@ def extract_system_metadata(energysystem, bus_dfs, component_dfs, storage_dfs, c
         'total_components': len(component_dfs)-len(storage_dfs),
         'total_storages': len(storage_dfs),
         'total_data_points': len(energysystem.timeindex),
-        'simulation_duration': f"{(energysystem.timeindex[-1] - energysystem.timeindex[0]).days} days"
+        'simulation_duration': f"{((energysystem.timeindex[-1] - energysystem.timeindex[0]).days) + 1} days"
     }
     
     return metadata
@@ -395,15 +395,7 @@ def display_bus_analysis(bus_dfs, metadata):
                     row=1, col=1
                 )
             
-            # # Cumulative flow
-            # for flow in selected_flows:
-            #     fig.add_trace(
-            #         go.Scatter(x=display_df.index, y=display_df[flow].cumsum(), 
-            #                  name=f"{flow} (cumulative)", showlegend=False),
-            #         row=1, col=2
-            #     )
-            
-            # Daily profile (if we have hourly data)
+      
             if len(display_df) > 24:
                 daily_profile = display_df[selected_flows].groupby(display_df.index.hour).mean()
                 for flow in selected_flows:
@@ -413,28 +405,12 @@ def display_bus_analysis(bus_dfs, metadata):
                         row=2, col=1
                     )
             
-            # # Distribution
-            # for flow in selected_flows:
-            #     fig.add_trace(
-            #         go.Box(y=display_df[flow], name=flow, showlegend=False),
-            #         row=2, col=2
-            #     )
+          
             
             fig.update_layout(height=800, title_text=f"Bus Analysis: {selected_bus}")
             st.plotly_chart(fig, use_container_width=True)
             
-            # Summary statistics
-            #st.subheader("Flow Statistics")
-            #st.dataframe(display_df[selected_flows].describe())
-            
-            # Download button
-            # csv = display_df[selected_flows].to_csv()
-            # st.download_button(
-            #     label="Download Bus Data as CSV",
-            #     data=csv,
-            #     file_name=f"bus_{selected_bus}_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
-            #     mime="text/csv"
-            # )
+        
 
 def display_component_analysis(component_dfs, metadata):
     st.header("⚙️ Component Analysis")
@@ -511,7 +487,16 @@ def display_storage_analysis(storage_dfs, metadata):
         # Flow summary
         #st.subheader("Flow Summary")
         #st.dataframe(comp_df.describe())
-        
+def format_currency(value):
+    """Format currency with dynamic units."""
+    abs_val = abs(value)
+
+    if abs_val >= 1e9:
+        return f"{value/1e9:,.2f} B€"
+    elif abs_val >= 1e6:
+        return f"{value/1e6:,.2f} M€"
+    else:
+        return f"{value:,.2f} €"        
         
 def display_cost_analysis(energysystem, results):
     """Display cost analysis in system summary using the exact cost calculation function"""
@@ -529,18 +514,18 @@ def display_cost_analysis(energysystem, results):
         
         # Display total cost metrics
         col1, col2, col3, col4 = st.columns(4)
-        
+    
         with col1:
-            st.metric("Total System Costs", f" Mio. € {total_costs/1000000:,.0f}")
+            st.metric("Total System Costs", format_currency(total_costs), delta = None, delta_color = 'inverse')
         
         with col2:
-            st.metric("Investment Costs", f" Mio. € {total_investment/1000000:,.0f}")
+            st.metric("Investment Costs", format_currency(total_investment), delta = None, delta_color = 'inverse')
         
         with col3:
-            st.metric("Variable Costs", f" Mio. € {total_variable/1000000:,.0f}")
+            st.metric("Variable Costs",format_currency(total_variable), delta = None, delta_color = 'inverse')
         
         with col4:
-            st.metric("Profits/Revenues", f" Mio. € {total_profits/1000000:,.0f}")
+            st.metric("Profits/Revenues", format_currency(total_profits), delta = None, delta_color = 'normal')
         
         # Display detailed cost breakdown
         st.subheader("📊 Detailed Cost Breakdown")
@@ -637,11 +622,11 @@ def display_system_summary(bus_dfs, component_dfs, metadata, energysystem, resul
     with col2:
         total_component_flow = sum([meta['total_flow'] for meta in metadata['components'].values()])
         st.metric("Total Component Flow", f"{total_component_flow:.0f} MWh")
-        st.metric("Number of Components", metadata['system_summary']['total_components'])
+        st.metric("Number of Components", metadata['system_summary']['total_components']+metadata['system_summary']['total_storages'])
     
     with col3:
-        st.metric("Simulation Period", metadata['timeframe']['start'].strftime('%Y-%m-%d'))
-        st.metric("Data Points", metadata['system_summary']['total_data_points'])
+        st.metric("Simulation Start Period", metadata['timeframe']['start'].strftime('%Y-%m-%d'))
+        st.metric("Simulation End Period", metadata['timeframe']['end'].strftime('%Y-%m-%d'))
     
     with col4:
         st.metric("Time Resolution", f"{metadata['timeframe']['periods']} periods")
