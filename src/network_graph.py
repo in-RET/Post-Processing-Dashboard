@@ -337,10 +337,15 @@ def display_interactive_network_analysis(energysystem, bus_dfs, component_dfs, c
     
     # Create the network diagram
     with st.spinner("Creating interactive network visualization..."):
-       fig = create_interactive_network_diagram(
-    energysystem, bus_dfs, component_dfs, component_bus_mapping
-        )
+       create_interactive_network_diagram(
+        energysystem, bus_dfs, component_dfs, component_bus_mapping
+    )
+
+
        graph = st.session_state.network_graph
+       pos = st.session_state.network_positions
+    
+       fig = create_network_figure(graph, pos, selected_node)
     
     if fig is None:
         st.warning("Could not create network diagram. Please check your data.")
