@@ -577,7 +577,7 @@ def display_cost_analysis(energysystem, results):
             if 'profits' in cost_df.columns and not cost_df['profits'].empty:
                 profit_data = []
                 for component, profit in cost_df['profits'].items():
-                    if profit > 0:
+                    if profit < 0:
                         profit_data.append({
                             'Component Connection': str(component),
                             'Profit/Revenue (€)': profit

@@ -341,7 +341,6 @@ def display_interactive_network_analysis(energysystem, bus_dfs, component_dfs, c
         energysystem, bus_dfs, component_dfs, component_bus_mapping
     )
 
-
        graph = st.session_state.network_graph
        pos = st.session_state.network_positions
     
