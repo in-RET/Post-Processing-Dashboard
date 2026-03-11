@@ -85,6 +85,7 @@ def get_component_group_name(component_name):
 
 def create_colored_sankey(bus_dfs, component_dfs, component_bus_mapping):
     """Create a Sankey diagram with colored links based on component types"""
+    
     try:
         labels = []
         source = []
@@ -237,7 +238,8 @@ def create_colored_sankey(bus_dfs, component_dfs, component_bus_mapping):
             value_combined.append(data['value'])
             link_colors_combined.append(data['color'])
             link_labels_combined.append(data['label'])
-        
+       
+                
         if source_combined and target_combined and value_combined:
             # Create node colors
             node_colors = []
@@ -266,7 +268,7 @@ def create_colored_sankey(bus_dfs, component_dfs, component_bus_mapping):
                     line=dict(color="black", width=1),
                     label=labels,
                     color=node_colors,
-                    hovertemplate='<b>%{label}</b><extra></extra>'
+                    hovertemplate='<b>%{label}</b><extra></extra>'                    
                 ),
                 link=dict(
                     source=source_combined,
@@ -288,6 +290,15 @@ def create_colored_sankey(bus_dfs, component_dfs, component_bus_mapping):
                 margin=dict(t=100, l=50, r=50, b=50)
             )
             
+            fig.update_layout(
+                    font=dict(size=12),
+                    height=900,
+                )
+                
+            fig.update_traces(
+                node=dict(pad=20, thickness=18),
+                selector=dict(type="sankey")
+            )
             return fig, labels, source_combined, target_combined, value_combined, link_colors_combined
         else:
             return None, [], [], [], [], []
@@ -405,6 +416,7 @@ def create_colored_sankey_analysis(bus_dfs, component_dfs, component_bus_mapping
 
 def create_grouped_sankey(bus_dfs, component_dfs, component_bus_mapping):
     """Create a Sankey diagram with grouped similar components"""
+    
     try:
         labels = []
         source = []
@@ -701,6 +713,7 @@ def display_colored_sankey_diagram(energysystem, results, bus_dfs, component_dfs
         <div style="background-color: #f0f8ff; padding: 15px; border-radius: 10px; border-left: 5px solid #4CAF50;">
         <h4 style="margin: 0; color: #2E7D32;">🎯 Grouped Sankey View</h4>
         <p style="margin: 5px 0; font-size: 0.9rem;">
+        <style>.js-plotly-plot text {text-shadow: none !important;stroke: none !important;}</style>
         Similar components (e.g., PV_open_n, PV_open_s, PV_open_m) are automatically grouped together for cleaner visualization.
         </p>
         </div>
@@ -714,6 +727,7 @@ def display_colored_sankey_diagram(energysystem, results, bus_dfs, component_dfs
         <div style="background-color: #fff3cd; padding: 15px; border-radius: 10px; border-left: 5px solid #ffc107;">
         <h4 style="margin: 0; color: #856404;">🔍 Detailed Sankey View</h4>
         <p style="margin: 5px 0; font-size: 0.9rem;">
+        <style>.js-plotly-plot text {text-shadow: none !important;stroke: none !important;}</style>
         Shows all individual components without grouping. Use this view for detailed analysis of specific components.
         </p>
         </div>
