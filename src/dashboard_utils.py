@@ -412,7 +412,7 @@ def display_bus_analysis(bus_dfs, metadata):
             
         
 
-def display_component_analysis(component_dfs, metadata):
+def display_component_analysis(component_dfs,component_scalars, metadata):
     st.header("⚙️ Component Analysis")
     
     if not component_dfs:
@@ -438,9 +438,19 @@ def display_component_analysis(component_dfs, metadata):
         with col2:
             # Display all flows for this component
             st.subheader("Component Flows")
+            capacity_values = component_scalars.get(selected_component, {})
             for col in comp_df.columns:
                 total_flow = comp_df[col].sum()
                 st.write(f"**{col}**: {total_flow:.0f} MWh")
+                if isinstance(col, tuple):
+                    bus_name = col[-1]
+                else:
+                    bus_name = str(col).split("->")[-1].strip()
+        
+                if bus_name in capacity_values and bus_name != "None":
+                    st.write(f"**Installed capacity ({bus_name})**: {capacity_values[bus_name]:.1f} MW")
+                if "None" in capacity_values:
+                    st.write(f"**Installed storage capacity**: {capacity_values['None']:.1f} MWh")
         
         # Time series plot
         fig = px.line(comp_df, title=f"Component Flows: {selected_component}")
@@ -450,7 +460,7 @@ def display_component_analysis(component_dfs, metadata):
         #st.subheader("Flow Summary")
         #st.dataframe(comp_df.describe())
 
-def display_storage_analysis(storage_dfs, metadata):
+def display_storage_analysis(storage_dfs,component_scalars, metadata):
     st.header("⚙️ Storage Analysis")
     
     if not storage_dfs:
@@ -474,11 +484,18 @@ def display_storage_analysis(storage_dfs, metadata):
             st.metric("Connected Bus", comp_meta['connected_bus'])
         
         with col2:
+            capacity_values = component_scalars.get(selected_component, {})
             # Display all flows for this component
             st.subheader("Component Flows")
             for col in comp_df.columns:
                 total_flow = comp_df[col].sum()
                 st.write(f"**{col}**: {total_flow:.0f} MWh")
+                if isinstance(col, tuple):
+                    bus_name = col[-1]
+                else:
+                    bus_name = str(col).split("->")[-1].strip()
+                if "None" in capacity_values:
+                    st.write(f"**Installed storage capacity**: {capacity_values['None']:.1f} MWh")
         
         # Time series plot
         fig = px.line(comp_df, title=f"Component Flows: {selected_component}")
@@ -608,7 +625,7 @@ def display_cost_analysis(energysystem, results):
         import traceback
         st.error(f"Detailed error: {traceback.format_exc()}")
 
-def display_system_summary(bus_dfs, component_dfs, metadata, energysystem, results):
+def display_system_summary(bus_dfs, component_dfs,component_scalars, metadata, energysystem, results):
     st.header("📊 System Overview")
     
     # Key metrics
@@ -657,11 +674,18 @@ def display_system_summary(bus_dfs, component_dfs, metadata, energysystem, resul
     st.subheader("Component Summary")
     component_summary_data = []
     for comp_name, meta in metadata['components'].items():
+        capacity_values = component_scalars.get(comp_name, {})
+    
+        if capacity_values:
+            capacity_str = ", ".join([f"{v:.1f}" for v in capacity_values.values()])
+        else:
+            capacity_str = "-"
         component_summary_data.append({
             'Component Name': comp_name,
             'Connected Bus': meta['connected_bus'],
             'Total Flow [MWh]': meta['total_flow'],
             'Max Flow [MW]': meta['max_flow'],
+            'Installed Capacity [MW]': capacity_str,
             'Data Columns': len(meta['data_columns'])
         })
     
@@ -1063,7 +1087,7 @@ def display_combined_bus_component_analysis(combined_dfs, metadata=None):
         
         st.plotly_chart(fig, use_container_width=True)
         
-def display_detailed_flow_anlaysis(bus_dfs, component_dfs, storage_dfs, metadata):
+def display_detailed_flow_anlaysis(bus_dfs, component_dfs,component_scalars, storage_dfs, metadata):
     st.header("📊 Detailed Flow Analysis")
     
     tab_bus, tab_component, tab_storage = st.tabs([
@@ -1076,7 +1100,7 @@ def display_detailed_flow_anlaysis(bus_dfs, component_dfs, storage_dfs, metadata
         display_bus_analysis(bus_dfs, metadata)
     
     with tab_component:
-        display_component_analysis(component_dfs, metadata)
+        display_component_analysis(component_dfs,component_scalars, metadata)
     
     with tab_storage:
-        display_storage_analysis(storage_dfs, metadata)
+        display_storage_analysis(storage_dfs,component_scalars, metadata)

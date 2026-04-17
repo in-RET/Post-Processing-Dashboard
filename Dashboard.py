@@ -77,13 +77,13 @@ if uploaded_file is not None:
                 ])
                 
                 with tabs[0]:
-                    display_system_summary(bus_dfs, component_dfs, metadata, energysystem, results)
+                    display_system_summary(bus_dfs, component_dfs, component_scalars, metadata, energysystem, results)
                 
                 with tabs[1]:
                     display_combined_bus_component_analysis(combined_df, metadata)
                 
                 with tabs[2]:
-                    display_detailed_flow_anlaysis(bus_dfs, component_dfs, storage_dfs, metadata)
+                    display_detailed_flow_anlaysis(bus_dfs, component_dfs,component_scalars, storage_dfs, metadata)
                     #display_bus_analysis(bus_dfs, metadata)
                     
                 # with tabs[3]:
@@ -100,7 +100,7 @@ if uploaded_file is not None:
                     display_interactive_network_analysis(energysystem, bus_dfs, component_dfs, component_bus_mapping)
                     
                 with tabs[5]:
-                    compare_scenarios(energysystem, results, bus_dfs, component_dfs, storage_dfs, component_bus_mapping)
+                    compare_scenarios(energysystem, results, bus_dfs, component_dfs,component_scalars, storage_dfs, component_bus_mapping)
                 
                 
                 os.unlink(tmp_file_path)

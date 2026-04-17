@@ -13,7 +13,7 @@ import plotly.express as px
 from datetime import datetime
 from src.cost_calc import cost_calculation_from_es_and_results
 
-def compare_scenarios(energysystem, results, bus_dfs, component_dfs, storage_dfs, component_bus_mapping):
+def compare_scenarios(energysystem, results, bus_dfs, component_dfs, component_scalars, storage_dfs, component_bus_mapping):
     st.header("🔄 Multi-Scenario Comparison")
     
     base_scenario_name = st.text_input("Base Scenario Name", value="Base Scenario", key="base_name")
@@ -99,6 +99,7 @@ def compare_scenarios(energysystem, results, bus_dfs, component_dfs, storage_dfs
                         'name': scenario['name'],
                         'bus_dfs': bus_dfs_comp,
                         'component_dfs': component_dfs_comp,
+                        'component_scalars': component_scalars_comp,
                         'storage_dfs': storage_dfs_comp,
                         'component_bus_mapping': component_bus_mapping_comp,
                         'energysystem': energysystem_comp,  
@@ -107,7 +108,7 @@ def compare_scenarios(energysystem, results, bus_dfs, component_dfs, storage_dfs
                     })
             
             display_comparison_tables(
-                bus_dfs, component_dfs, storage_dfs, component_bus_mapping, base_scenario_name,
+                bus_dfs, component_dfs,component_scalars, storage_dfs, component_bus_mapping, base_scenario_name,
                 comparison_data, energysystem, results, is_regionalisation
             )
             
@@ -125,7 +126,7 @@ def compare_scenarios(energysystem, results, bus_dfs, component_dfs, storage_dfs
     else:
         st.info("🔢 Select the number of comparison scenarios to get started")
     
-def display_comparison_tables(base_bus_dfs, base_component_dfs, base_storage_dfs, base_component_bus_mapping,
+def display_comparison_tables(base_bus_dfs, base_component_dfs,base_component_scalars, base_storage_dfs, base_component_bus_mapping,
                               base_name, comparison_data, base_energysystem, base_results, is_regionalisation=False):
     """Display simple comparison tables with multiindex columns (Total Flow first level, scenarios second level)"""
     
@@ -134,6 +135,7 @@ def display_comparison_tables(base_bus_dfs, base_component_dfs, base_storage_dfs
         'name': base_name, 
         'bus_dfs': base_bus_dfs, 
         'component_dfs': base_component_dfs,
+        'component_scalars': base_component_scalars,
         'storage_dfs': base_storage_dfs,
         'component_bus_mapping': base_component_bus_mapping,
         'energysystem': base_energysystem,  # Base scenario energysystem
@@ -205,7 +207,7 @@ def display_comparison_tables(base_bus_dfs, base_component_dfs, base_storage_dfs
         st.subheader("⚙️ Component Summary Comparison")
         
         # Create tabs for Total Flow and Peak Flow
-        comp_tab1, comp_tab2 = st.tabs(["📊 Total Flow (MWh)", "🔝 Peak Flow (MW)"])
+        comp_tab1, comp_tab2, comp_tab3 = st.tabs(["📊 Total Flow (MWh)", "🔝 Peak Flow (MW)", "⚖️ Installed Capacity (Optimized)"])
         
         with comp_tab1:
             st.write("**Total Energy Flow from Components**")
@@ -233,8 +235,20 @@ def display_comparison_tables(base_bus_dfs, base_component_dfs, base_storage_dfs
             else:
                 st.info("No component data available for comparison")
         
+        with comp_tab3:
+            st.write("**Installed Capacity from Components**")
+            component_capacity_data = create_component_multiindex_capacity_table(all_scenarios)
+            component_capacity_data = component_capacity_data.apply(pd.to_numeric, errors='coerce')
+            
+            if not component_capacity_data.empty:
+                # format similar to others
+                styled_capacity_df = format_multiindex_dataframe(component_capacity_data, 'capacity')
+                st.dataframe(styled_capacity_df, use_container_width=True, height=400)
+            else:
+                st.info("No component capacity data available for comparison")
+        
         # Download buttons for component data
-        col1, col2 = st.columns(2)
+        col1, col2, col3 = st.columns(3)
         with col1:
             if not component_total_flow_data.empty:
                 comp_total_csv = component_total_flow_data.to_csv(index=False)
@@ -254,6 +268,17 @@ def display_comparison_tables(base_bus_dfs, base_component_dfs, base_storage_dfs
                     file_name=f"component_peak_flow_comparison_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
                     mime="text/csv",
                     key="download_comp_peak"
+                )
+        
+        with col3:
+            if not component_capacity_data.empty:
+                comp_cap_csv = component_capacity_data.to_csv(index=False)
+                st.download_button(
+                    label="Download Component Capacity CSV",
+                    data=comp_cap_csv,
+                    file_name=f"component_capacity_comparison_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                    mime="text/csv",
+                    key="download_comp_capacity"
                 )
     
     with tab3:
@@ -287,7 +312,7 @@ def display_comparison_tables(base_bus_dfs, base_component_dfs, base_storage_dfs
                 st.dataframe(styled_storage_peak_df, use_container_width=True, height=400)
             else:
                 st.info("No storage data available for comparison")
-        
+                
         # Download buttons for storage data
         col1, col2 = st.columns(2)
         with col1:
@@ -322,7 +347,7 @@ def format_multiindex_dataframe(df, flow_type):
     # Get all numeric columns (scenario columns)
     numeric_columns = []
     for col in df.columns:
-        if col[0] in ['Total Flow (MWh)', 'Peak Flow (MW)']:
+        if col[0] in ['Total Flow (MWh)', 'Peak Flow (MW)', 'Installed Capacity (MW or MWh)']:
             numeric_columns.append(col)
     
     # Apply formatting based on flow type
@@ -334,6 +359,35 @@ def format_multiindex_dataframe(df, flow_type):
         format_dict = {col: '{:.1f}' for col in numeric_columns}
     
     return styled_df.style.format(format_dict)
+
+def create_component_multiindex_capacity_table(all_scenarios):
+    data = {}
+
+    for scenario in all_scenarios:
+        scenario_name = scenario['name']
+        scalars = scenario.get('component_scalars', {})
+
+        for comp, bus_dict in scalars.items():
+            for bus, value in bus_dict.items():
+                key = (comp, bus)
+
+                if key not in data:
+                    data[key] = {}
+
+                data[key][scenario_name] = value
+
+    if not data:
+        return pd.DataFrame()
+
+    df = pd.DataFrame(data).T
+    df.index = pd.MultiIndex.from_tuples(df.index, names=["Component", "Bus"])
+
+    # ---- Convert to MultiIndex columns like bus table ----
+    df.columns = pd.MultiIndex.from_tuples(
+        [('Installed Capacity (MW or MWh)', col) for col in df.columns]
+    )
+
+    return df
 
 def create_bus_multiindex_total_flow_table(all_scenarios):
     """Create a bus table with multiindex columns (Total Flow first level, scenarios second level)"""
